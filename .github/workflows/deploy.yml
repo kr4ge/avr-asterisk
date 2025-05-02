@@ -9,8 +9,9 @@ env:
   IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/avr-asterisk
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -21,29 +22,23 @@ jobs:
       - name: Build Docker image
         run: docker build -t $IMAGE_NAME .
 
-      - name: Push image to Docker Hub
+      - name: Push Docker image
         run: docker push $IMAGE_NAME
 
-  deploy-to-ec2:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-      - name: Deploy and test Asterisk on EC2
-        env:
-          IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/avr-asterisk
+      - name: Deploy and Verify Asterisk on EC2
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
             echo '>> Pulling image'
             docker pull $IMAGE_NAME
 
-            echo '>> Restarting container'
-            docker stop asterisk || true
-            docker rm asterisk || true
+            echo '>> (Re)starting container'
+            docker stop asterisk 2>/dev/null || true
+            docker rm asterisk 2>/dev/null || true
 
             docker run -d --name asterisk \
               -p 5060:5060/udp \
@@ -53,10 +48,12 @@ jobs:
               --restart unless-stopped \
               $IMAGE_NAME
 
-            echo '>> Waiting 5s for Asterisk to boot'
+            echo '>> Waiting 5 seconds for Asterisk to boot...'
             sleep 5
 
-            echo '>> Verifying Asterisk CLI is responsive'
+            echo '>> Confirming Asterisk is running...'
             docker exec asterisk asterisk -rx 'core show version'
-            docker exec asterisk asterisk -rx 'pjsip show endpoints' | grep 6001
+            docker exec asterisk asterisk -rx 'pjsip show endpoints' | grep 6001 || (echo 'Missing endpoint 6001' && exit 1)
+
+            echo '✅ Asterisk deployed and verified successfully.'
           "
