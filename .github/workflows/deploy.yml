@@ -1,0 +1,62 @@
+name: Build, Push, and Deploy Asterisk
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/avr-asterisk
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t $IMAGE_NAME .
+
+      - name: Push image to Docker Hub
+        run: docker push $IMAGE_NAME
+
+  deploy-to-ec2:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Deploy and test Asterisk on EC2
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/avr-asterisk
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
+            echo '>> Pulling image'
+            docker pull $IMAGE_NAME
+
+            echo '>> Restarting container'
+            docker stop asterisk || true
+            docker rm asterisk || true
+
+            docker run -d --name asterisk \
+              -p 5060:5060/udp \
+              -p 8088:8088 \
+              -p 5038:5038 \
+              -p 10000-20000:10000-20000/udp \
+              --restart unless-stopped \
+              $IMAGE_NAME
+
+            echo '>> Waiting 5s for Asterisk to boot'
+            sleep 5
+
+            echo '>> Verifying Asterisk CLI is responsive'
+            docker exec asterisk asterisk -rx 'core show version'
+            docker exec asterisk asterisk -rx 'pjsip show endpoints' | grep 6001
+          "
