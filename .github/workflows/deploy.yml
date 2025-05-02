@@ -32,9 +32,9 @@ jobs:
 
       - name: Deploy and Verify Asterisk on EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
             echo '>> Pulling image'
-            docker pull $IMAGE_NAME
+            docker pull "$IMAGE_NAME"
 
             echo '>> (Re)starting container'
             docker stop asterisk 2>/dev/null || true
@@ -46,14 +46,22 @@ jobs:
               -p 5038:5038 \
               -p 10000-20000:10000-20000/udp \
               --restart unless-stopped \
-              $IMAGE_NAME
+              "$IMAGE_NAME"
 
             echo '>> Waiting 5 seconds for Asterisk to boot...'
             sleep 5
 
             echo '>> Confirming Asterisk is running...'
             docker exec asterisk asterisk -rx 'core show version'
-            docker exec asterisk asterisk -rx 'pjsip show endpoints' | grep 6001 || (echo 'Missing endpoint 6001' && exit 1)
+            echo '>> Checking SIP endpoint registration...'
+            docker exec asterisk asterisk -rx 'pjsip show endpoints' || exit 1
+
+            if ! docker exec asterisk asterisk -rx 'pjsip show endpoints' | grep 6001; then
+              echo '❌ ERROR: Extension 6001 not found.'
+              exit 1
+            fi
 
             echo '✅ Asterisk deployed and verified successfully.'
-          "
+            echo '>> (Optional) Tail logs:'
+            docker logs --tail=15 asterisk || true
+          EOF
