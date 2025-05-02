@@ -249,7 +249,7 @@ COPY --from=builder /usr/lib/libasteriskssl.so.1 \
                     /usr/lib/libasteriskpj.so \
                     /usr/lib/
 
-# Copy configs
+# Copy config
 COPY configs/extensions.conf /etc/asterisk/extensions.conf
 COPY configs/pjsip.conf /etc/asterisk/pjsip.conf
 COPY configs/ari.conf /etc/asterisk/ari.conf
