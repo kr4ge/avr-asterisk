@@ -28,8 +28,8 @@ jobs:
     - name: 🐳 Build & Push Asterisk image
       uses: docker/build-push-action@v3
       with:
-        context: ./asterisk
-        file: ./asterisk/Dockerfile
+        context: avr-asterisk
+        file: avr-asterisk/Dockerfile
         push: true
         tags: ${{ env.DOCKERHUB_REPO }}-asterisk:latest
 
