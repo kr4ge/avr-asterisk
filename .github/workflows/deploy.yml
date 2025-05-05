@@ -52,11 +52,7 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd ~/avr-asterisk
-          docker pull ${{ env.DOCKERHUB_REPO }}-asterisk:latest
-
-          echo '>> Stopping old containers (if any)'
-          docker-compose down || true
-
-          echo '>> Starting containers with increased timeout'
           export COMPOSE_HTTP_TIMEOUT=300
+          docker pull ${{ env.DOCKERHUB_REPO }}-asterisk:latest
+          docker-compose down || true
           docker-compose up -d --remove-orphans
