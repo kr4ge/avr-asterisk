@@ -63,7 +63,7 @@
   COPY configs/http.conf /etc/asterisk/http.conf
   COPY configs/rtp.conf /etc/asterisk/rtp.conf
   
-  # Expose essential Asterisk ports
+  # Expose essential Asterisk port
   EXPOSE 5060/udp
   EXPOSE 8088
   EXPOSE 5038
