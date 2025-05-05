@@ -28,10 +28,11 @@ jobs:
     - name: 🐳 Build & Push Asterisk image
       uses: docker/build-push-action@v3
       with:
-        context: avr-asterisk
-        file: avr-asterisk/Dockerfile
+        context: .
+        file: ./Dockerfile
         push: true
         tags: ${{ env.DOCKERHUB_REPO }}-asterisk:latest
+
 
     - name: 📦 Copy docker-compose.yml to EC2
       uses: appleboy/scp-action@v0.1.5
