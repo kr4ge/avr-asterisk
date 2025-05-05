@@ -1,4 +1,4 @@
-name: Build, Push, and Deploy Asterisk
+name: Build and Deploy AVR System (ARI)
 
 on:
   push:
@@ -6,67 +6,51 @@ on:
       - main
 
 env:
-  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/avr-asterisk
+  DOCKERHUB_REPO: kr4ge/avr
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: ✅ Checkout repo
-        uses: actions/checkout@v3
+    - name: 🧾 Checkout code
+      uses: actions/checkout@v3
 
-      - name: 🔐 Login to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+    - name: 🛠 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-      - name: 🛠 Build Docker image
-        run: docker build -t $IMAGE_NAME .
+    - name: 🔐 Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: 🚀 Push Docker image to Docker Hub
-        run: docker push $IMAGE_NAME
+    - name: 🐳 Build & Push Asterisk image
+      uses: docker/build-push-action@v3
+      with:
+        context: ./asterisk
+        file: ./asterisk/Dockerfile
+        push: true
+        tags: ${{ env.DOCKERHUB_REPO }}-asterisk:latest
 
-      - name: 🔑 Set up SSH agent
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+    - name: 📦 Copy docker-compose.yml to EC2
+      uses: appleboy/scp-action@v0.1.5
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        source: "docker-compose.yml"
+        target: "~/avr-asterisk/"
 
-      - name: 📦 Deploy and Verify Asterisk on EC2
-        env:
-          IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/avr-asterisk
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-            echo '🔐 Logging into Docker Hub'
-            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-
-            echo '📥 Pulling latest image'
-            docker pull "$IMAGE_NAME"
-
-            echo '♻️ Stopping and removing old container (if any)'
-            docker stop asterisk 2>/dev/null || true
-            docker rm asterisk 2>/dev/null || true
-
-            echo '🚀 Starting new Asterisk container'
-            docker run -d --name asterisk \
-              -p 5060:5060/udp \
-              -p 8088:8088 \
-              -p 5038:5038 \
-              -p 10000-20000:10000-20000/udp \
-              --restart unless-stopped \
-              "$IMAGE_NAME"
-
-            echo '⏱ Waiting 5 seconds for Asterisk to initialize...'
-            sleep 5
-
-            echo '📋 core show version'
-            docker exec asterisk asterisk -rx 'core show version'
-
-            echo '📋 pjsip show endpoints'
-            docker exec asterisk asterisk -rx 'pjsip show endpoints'
-
-            echo '🔍 Verifying extension 6001...'
-            docker exec asterisk asterisk -rx 'pjsip show endpoints' | grep 6001 || (echo '❌ Extension 6001 not found' && exit 1)
-
-            echo '✅ Asterisk deployed and verified successfully.'
-          EOF
+    - name: 🚀 Deploy to EC2 with Docker Compose
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd ~/avr-asterisk
+          docker pull ${{ env.DOCKERHUB_REPO }}-asterisk:latest
+          docker-compose down || true
+          docker-compose up -d --remove-orphans
