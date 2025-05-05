@@ -5,7 +5,7 @@ services:
     image: kr4ge/avr-asterisk:latest
     container_name: asterisk
     ports:
-      - "5038:5038"
+      - "5060:5060/tcp"
       - "5060:5060/udp"
       - "10000-20000:10000-20000/udp"
       - "8088:8088"
@@ -18,3 +18,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+networks:
+  avrnw:
+    driver: bridge
