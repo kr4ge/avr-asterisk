@@ -50,11 +50,11 @@ COPY --from=builder /var/spool/asterisk /var/spool/asterisk
 COPY --from=builder /etc/asterisk /etc/asterisk
 
 # Inject your configs
-COPY config/extensions.conf /etc/asterisk/extensions.conf
-COPY config/pjsip.conf /etc/asterisk/pjsip.conf
-COPY config/ari.conf /etc/asterisk/ari.conf
-COPY config/http.conf /etc/asterisk/http.conf
-COPY config/rtp.conf /etc/asterisk/rtp.conf
+COPY configs/extensions.conf /etc/asterisk/extensions.conf
+COPY configs/pjsip.conf /etc/asterisk/pjsip.conf
+COPY configs/ari.conf /etc/asterisk/ari.conf
+COPY configs/http.conf /etc/asterisk/http.conf
+COPY configs/rtp.conf /etc/asterisk/rtp.conf
 
 # Expose ports
 EXPOSE 5060/udp 8088 5038/tcp
